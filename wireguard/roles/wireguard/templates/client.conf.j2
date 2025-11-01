@@ -1,0 +1,11 @@
+# Client: {{ item.name }}
+[Interface]
+PrivateKey = {{ item.private_key }}
+Address = {{ item.interface_cidr }}
+DNS = {{ item.dns }}
+
+[Peer]
+PublicKey = {{ wireguard_server_public_key }}
+Endpoint = {{ wg_public_address }}:{{ wg_port }}
+AllowedIPs = {{ item.allowed_ips }}
+PersistentKeepalive = {{ item.persistent_keepalive }}

@@ -1,0 +1,62 @@
+---
+argument_specs:
+  main:
+    short_description: Configure a WireGuard VPN server (IPv4)
+    description:
+      - Configures a secure WireGuard VPN server (IPv4-only) with optional clients.
+      - Supports Debian, Ubuntu, and Amazon Linux using nftables for NAT and routing.
+      - Handles key management, client provisioning, and safe, idempotent re-runs.
+    options:
+      wg_interface:
+        type: str
+        required: true
+        description: WireGuard interface name (e.g. 'wg0').
+      wg_interface_cidr:
+        type: str
+        required: true
+        description: Server interface address in IPv4 CIDR notation (e.g. '10.55.55.1/24').
+      wg_port:
+        type: int
+        required: true
+        description: UDP port for WireGuard (1-65535) (e.g. '51820').
+      wg_public_address:
+        type: str
+        required: true
+        description: Public DNS name or IPv4 address clients connect to (e.g. 'vpn.example.com').
+      wg_fetch_dir:
+        type: str
+        required: false
+        default: ./wg_clients
+        description: Local directory on the Ansible control node where fetched client configs and QR codes are saved.
+      wg_clients:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description: List of clients to generate keys, configs, and QR codes for.
+        options:
+          name:
+            type: str
+            required: true
+            description: Unique client identifier (e.g. 'laptop' or 'phone').
+          interface_cidr:
+            type: str
+            required: true
+            description: Client VPN address in IPv4 CIDR notation (e.g. '10.55.55.2/32').
+          allowed_ips:
+            type: str
+            required: true
+            description: Routes the client will send through the tunnel (e.g. '0.0.0.0/0' for full tunnel).
+          dns:
+            type: str
+            required: true
+            description: DNS resolver(s) for the client (e.g. '1.1.1.1').
+          persistent_keepalive:
+            type: int
+            required: true
+            description: Keepalive interval in seconds (e.g. '25'). Set to '0' to disable.
+          rotate_keys:
+            type: bool
+            required: false
+            default: false
+            description: If true, rotates this client's keypair.

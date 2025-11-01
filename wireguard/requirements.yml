@@ -1,0 +1,5 @@
+# This file is required for ansible-lint to properly resolve FQCN modules.
+# It ensures linting and validation work even if collections are already installed system-wide.
+---
+collections:
+  - name: ansible.posix

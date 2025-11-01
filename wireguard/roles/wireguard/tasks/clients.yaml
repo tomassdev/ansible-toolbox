@@ -1,0 +1,144 @@
+---
+- name: Ensure WireGuard clients directory exists
+  ansible.builtin.file:
+    path: "/etc/wireguard/clients/{{ item.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop: "{{ wg_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Rotate WireGuard client keys
+  ansible.builtin.file:
+    path: "/etc/wireguard/clients/{{ pair.0.name }}/{{ pair.1 }}"
+    state: absent
+  loop: "{{ wg_clients | product(['private.key', 'public.key']) | list }}"
+  loop_control:
+    loop_var: pair
+    label: "{{ pair.0.name }}/{{ pair.1 }}"
+  when: pair.0.rotate_keys
+
+- name: Generate client private keys
+  ansible.builtin.shell: |
+    umask 077
+    wg genkey > "/etc/wireguard/clients/{{ item.name }}/private.key"
+  args:
+    creates: "/etc/wireguard/clients/{{ item.name }}/private.key"
+  loop: "{{ wg_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Generate client public keys
+  ansible.builtin.shell: |
+    umask 077
+    wg pubkey < "/etc/wireguard/clients/{{ item.name }}/private.key" > "/etc/wireguard/clients/{{ item.name }}/public.key"
+  args:
+    creates: "/etc/wireguard/clients/{{ item.name }}/public.key"
+  loop: "{{ wg_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Read client private keys
+  ansible.builtin.slurp:
+    path: "/etc/wireguard/clients/{{ item.name }}/private.key"
+  register: wireguard_client_privs
+  loop: "{{ wg_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Read client public keys
+  ansible.builtin.slurp:
+    path: "/etc/wireguard/clients/{{ item.name }}/public.key"
+  register: wireguard_client_pubs
+  loop: "{{ wg_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Assemble expanded client objects
+  ansible.builtin.set_fact:
+    wireguard_clients_expanded: >-
+      {{
+        (wireguard_clients_expanded | default([])) + [ {
+          'name': item.0.name,
+          'interface_cidr': item.0.interface_cidr,
+          'allowed_ips': item.0.allowed_ips,
+          'dns': item.0.dns,
+          'persistent_keepalive': item.0.persistent_keepalive,
+          'private_key': (item.1.content | b64decode | trim),
+          'public_key':  (item.2.content | b64decode | trim)
+        } ]
+      }}
+  with_together:
+    - "{{ wg_clients }}"
+    - "{{ wireguard_client_privs.results }}"
+    - "{{ wireguard_client_pubs.results }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+  no_log: true
+
+- name: Render client configs
+  ansible.builtin.template:
+    src: client.conf.j2
+    dest: "/etc/wireguard/clients/{{ item.name }}/client.conf"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "sh -c 'wg-quick strip %s >/dev/null'"
+  loop: "{{ wireguard_clients_expanded }}"
+  register: wireguard_render_results
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Check existing QR codes
+  ansible.builtin.stat:
+    path: "/etc/wireguard/clients/{{ item.name }}/client.png"
+  loop: "{{ wireguard_clients_expanded }}"
+  register: wireguard_png_stats
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Generate QR codes for client configs
+  ansible.builtin.shell: |
+    set -eu
+    umask 077
+    qrencode -t png -r "/etc/wireguard/clients/{{ pair.0.item.name }}/client.conf" \
+      -o "/etc/wireguard/clients/{{ pair.0.item.name }}/client.png"
+  loop: "{{ wireguard_render_results.results | zip(wireguard_png_stats.results) | list }}"
+  loop_control:
+    loop_var: pair
+    label: "{{ pair.0.item.name }}"
+  when: pair.0.changed or (not pair.1.stat.exists)
+  changed_when: pair.0.changed or (not pair.1.stat.exists)
+
+- name: Render server config with client peers
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "/etc/wireguard/{{ wg_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "sh -c 'wg-quick strip %s >/dev/null'"
+  notify: Restart wireguard
+  no_log: true
+
+- name: Enable and start WireGuard service
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wg_interface }}"
+    enabled: true
+    state: started
+
+- name: Fetch client artifacts to control node
+  ansible.builtin.fetch:
+    src: "/etc/wireguard/clients/{{ item.0.name }}/client.{{ item.1 }}"
+    dest: "{{ wg_fetch_dir }}/{{ item.0.name }}/client.{{ item.1 }}"
+    flat: true
+  loop: "{{ wireguard_clients_expanded | product(['conf', 'png']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}/client.{{ item.1 }}"

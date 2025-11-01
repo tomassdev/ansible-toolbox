@@ -1,0 +1,26 @@
+---
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ lookup('first_found', params) }}"
+  vars:
+    params:
+      files:
+        - "{{ role_path }}/vars/{{ ansible_distribution }}.yaml"
+        - "{{ role_path }}/vars/{{ ansible_os_family }}.yaml"
+      skip: true
+
+- name: Install WireGuard packages
+  ansible.builtin.import_tasks: packages.yaml
+  tags: [packages]
+
+- name: Configure nftables firewall
+  ansible.builtin.import_tasks: nftables.yaml
+  tags: [firewall]
+
+- name: Configure WireGuard server
+  ansible.builtin.import_tasks: server.yaml
+  tags: [server]
+
+- name: Configure WireGuard clients
+  ansible.builtin.import_tasks: clients.yaml
+  when: wg_clients | length > 0
+  tags: [clients]

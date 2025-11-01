@@ -1,0 +1,21 @@
+---
+wg_interface: wg0
+wg_interface_cidr: 10.50.50.1/24
+wg_port: 51820
+wg_public_address: "{{ ansible_host }}"
+
+wg_clients:
+  - name: phone
+    interface_cidr: 10.50.50.2/32
+    allowed_ips: 0.0.0.0/0
+    dns: 1.1.1.1
+    persistent_keepalive: 25
+    rotate_keys: false
+  - name: laptop
+    interface_cidr: 10.50.50.3/32
+    allowed_ips: 0.0.0.0/0
+    dns: 1.1.1.1
+    persistent_keepalive: 25
+    rotate_keys: false
+
+wg_fetch_dir: ./wg_clients

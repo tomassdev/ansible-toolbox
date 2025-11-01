@@ -1,0 +1,13 @@
+[Interface]
+Address = {{ wg_interface_cidr }}
+ListenPort = {{ wg_port }}
+PrivateKey = {{ wireguard_server_private_key }}
+SaveConfig = false
+
+{% for item in (wireguard_clients_expanded | default([])) | sort(attribute='name') -%}
+# Client: {{ item.name }}
+[Peer]
+PublicKey = {{ item.public_key }}
+AllowedIPs = {{ item.interface_cidr }}
+
+{% endfor -%}

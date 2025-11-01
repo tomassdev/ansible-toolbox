@@ -1,0 +1,7 @@
+---
+wireguard_packages:
+  - wireguard-tools
+  - nftables
+  - qrencode
+
+wireguard_nft_main_conf: /etc/nftables.conf

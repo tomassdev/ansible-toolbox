@@ -1,0 +1,70 @@
+---
+- name: Enable IPv4 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    sysctl_set: true
+    reload: true
+    sysctl_file: /etc/sysctl.d/99-wireguard.conf
+
+- name: Ensure nftables drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure nftables.conf includes /etc/nftables.d/*.nft
+  ansible.builtin.lineinfile:
+    path: "{{ wireguard_nft_main_conf }}"
+    regexp: '^\s*include\s+"/etc/nftables\.d/\*\.nft"\s*$'
+    line: 'include "/etc/nftables.d/*.nft"'
+    insertafter: EOF
+    state: present
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    validate: "nft -c -f %s"
+  notify: Reload nftables
+
+- name: Deploy WireGuard nftables rules (IPv4-only)
+  vars:
+    _wg_network_cidr: "{{ wg_interface_cidr | ansible.utils.ipaddr('network/prefix') }}"
+    _wg_uplink_interface: "{{ ansible_default_ipv4.interface }}"
+  ansible.builtin.copy:
+    dest: /etc/nftables.d/50-wireguard.nft
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nft -c -f %s"
+    content: |
+      # WireGuard IPv4-only rules managed by Ansible
+      table ip wg_nat {
+        chain postrouting {
+          type nat hook postrouting priority srcnat;
+          oifname "{{ _wg_uplink_interface }}"
+          ip saddr {{ _wg_network_cidr }} counter masquerade
+        }
+      }
+
+      table ip wg_filter {
+        chain input {
+          type filter hook input priority 0;
+          udp dport {{ wg_port }} accept
+        }
+        chain forward {
+          type filter hook forward priority 0;
+          iifname "{{ wg_interface }}" accept
+          oifname "{{ wg_interface }}" accept
+        }
+      }
+  notify: Reload nftables
+
+- name: Enable and start nftables service
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
