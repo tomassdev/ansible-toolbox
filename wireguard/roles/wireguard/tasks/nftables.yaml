@@ -33,7 +33,7 @@
 - name: Deploy WireGuard nftables rules (IPv4-only)
   vars:
     _wg_network_cidr: "{{ wg_interface_cidr | ansible.utils.ipaddr('network/prefix') }}"
-    _wg_uplink_interface: "{{ ansible_default_ipv4.interface }}"
+    _wg_uplink_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
   ansible.builtin.copy:
     dest: /etc/nftables.d/50-wireguard.nft
     owner: root

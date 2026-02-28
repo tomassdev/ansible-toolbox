@@ -4,8 +4,8 @@
   vars:
     params:
       files:
-        - "{{ role_path }}/vars/{{ ansible_distribution }}.yaml"
-        - "{{ role_path }}/vars/{{ ansible_os_family }}.yaml"
+        - "{{ role_path }}/vars/{{ ansible_facts['distribution'] }}.yaml"
+        - "{{ role_path }}/vars/{{ ansible_facts['os_family'] }}.yaml"
       skip: true
 
 - name: Install WireGuard packages
