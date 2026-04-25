@@ -16,8 +16,8 @@ This Ansible playbook provisions and manages a **WireGuard VPN server** with an 
 
 ## 🧩 Requirements
 
-- **Ansible Core:** 2.19+
-- **Python:** 3.9+ on target host
+- **Ansible Core:** 2.20+
+- **Python:** 3.14+ on target host
 
 ## 🚀 Usage
 
